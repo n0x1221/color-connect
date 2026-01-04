@@ -5,9 +5,9 @@ const GRID_SIZE = 5;
 const CELL_SIZE = canvas.width / GRID_SIZE;
 
 let paths = {};
-let solutionPaths = {};
 let dots = {};
 let currentColor = null;
+let levelActive = true;
 
 const COLORS = ["red", "blue", "green"];
 
@@ -66,8 +66,9 @@ function isAdjacent(a, b) {
   return Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) === 1;
 }
 
-function isOccupied(x, y) {
+function isOccupied(x, y, ignoreColor) {
   for (let color in paths) {
+    if (color === ignoreColor) continue;
     if (paths[color].some(p => p[0] === x && p[1] === y)) return true;
   }
   return false;
@@ -81,11 +82,11 @@ function getCell(e) {
   ];
 }
 
-// ===== RANDOM SOLVABLE LEVEL GENERATOR =====
+// ===== RANDOM SOLVABLE LEVEL =====
 function generateLevel() {
   dots = {};
-  solutionPaths = {};
   paths = {};
+  levelActive = true;
 
   let occupied = new Set();
 
@@ -121,15 +122,17 @@ function generateLevel() {
       occupied.add(`${x},${y}`);
     }
 
-    solutionPaths[color] = path;
     dots[color] = [path[0], path[path.length - 1]];
   });
 
+  document.getElementById("status").innerText = "New Level";
   drawGrid();
 }
 
 // ===== INPUT =====
 canvas.addEventListener("pointerdown", (e) => {
+  if (!levelActive) return;
+
   const [x, y] = getCell(e);
   for (let color in dots) {
     if (dots[color].some(d => d[0] === x && d[1] === y)) {
@@ -140,7 +143,7 @@ canvas.addEventListener("pointerdown", (e) => {
 });
 
 canvas.addEventListener("pointermove", (e) => {
-  if (!currentColor) return;
+  if (!currentColor || !levelActive) return;
 
   const [x, y] = getCell(e);
   if (!isInside(x, y)) return;
@@ -149,7 +152,7 @@ canvas.addEventListener("pointermove", (e) => {
   const last = path.at(-1);
 
   if (!isAdjacent(last, [x, y])) return;
-  if (isOccupied(x, y)) return;
+  if (isOccupied(x, y, currentColor)) return;
 
   path.push([x, y]);
   drawGrid();
@@ -160,19 +163,30 @@ canvas.addEventListener("pointerup", () => {
   checkWin();
 });
 
-// ===== WIN CHECK =====
+// ===== FIXED WIN CHECK =====
 function checkWin() {
   for (let color in dots) {
     const path = paths[color];
-    if (!path) return;
+    if (!path || path.length < 2) return;
 
-    const end = dots[color][1];
-    const last = path.at(-1);
-    if (last[0] !== end[0] || last[1] !== end[1]) return;
+    const [start, end] = dots[color];
+    const first = path[0];
+    const last = path[path.length - 1];
+
+    if (
+      first[0] !== start[0] ||
+      first[1] !== start[1] ||
+      last[0] !== end[0] ||
+      last[1] !== end[1]
+    ) {
+      return;
+    }
   }
 
+  // ✅ WIN
+  levelActive = false;
   document.getElementById("status").innerText = "🎉 Level Complete!";
-  setTimeout(generateLevel, 1000);
+  setTimeout(generateLevel, 1200);
 }
 
 // ===== START =====
