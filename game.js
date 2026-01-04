@@ -5,13 +5,14 @@ const GRID_SIZE = 5;
 const CELL_SIZE = canvas.width / GRID_SIZE;
 
 let paths = {};
+let solutionPaths = {}; // Store full solution paths
 let dots = {};
 let currentColor = null;
 let levelActive = true;
 
 const COLORS = ["red", "blue", "green"];
 
-// ===== DRAW =====
+// ===== DRAW GRID =====
 function drawGrid() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -28,6 +29,7 @@ function drawGrid() {
     ctx.stroke();
   }
 
+  // Draw dots
   for (let color in dots) {
     dots[color].forEach(([x, y]) => {
       ctx.fillStyle = color;
@@ -43,6 +45,7 @@ function drawGrid() {
     });
   }
 
+  // Draw paths
   for (let color in paths) {
     ctx.strokeStyle = color;
     ctx.lineWidth = 10;
@@ -82,46 +85,42 @@ function getCell(e) {
   ];
 }
 
-// ===== RANDOM SOLVABLE LEVEL =====
+// ===== SOLVABLE PATH GENERATOR =====
+function generateRandomPath(length, occupied) {
+  let x = Math.floor(Math.random() * GRID_SIZE);
+  let y = Math.floor(Math.random() * GRID_SIZE);
+  let path = [[x, y]];
+  occupied.add(`${x},${y}`);
+
+  for (let i = 0; i < length; i++) {
+    let moves = [
+      [x + 1, y],
+      [x - 1, y],
+      [x, y + 1],
+      [x, y - 1]
+    ].filter(([nx, ny]) => isInside(nx, ny) && !occupied.has(`${nx},${ny}`));
+
+    if (moves.length === 0) break;
+
+    [x, y] = moves[Math.floor(Math.random() * moves.length)];
+    path.push([x, y]);
+    occupied.add(`${x},${y}`);
+  }
+  return path;
+}
+
+// ===== GENERATE NEW LEVEL =====
 function generateLevel() {
-  dots = {};
   paths = {};
+  solutionPaths = {};
+  dots = {};
   levelActive = true;
 
   let occupied = new Set();
 
   COLORS.forEach(color => {
-    let path = [];
-    let x, y;
-
-    do {
-      x = Math.floor(Math.random() * GRID_SIZE);
-      y = Math.floor(Math.random() * GRID_SIZE);
-    } while (occupied.has(`${x},${y}`));
-
-    path.push([x, y]);
-    occupied.add(`${x},${y}`);
-
-    let length = 4 + Math.floor(Math.random() * 4);
-
-    for (let i = 0; i < length; i++) {
-      let moves = [
-        [x + 1, y],
-        [x - 1, y],
-        [x, y + 1],
-        [x, y - 1]
-      ].filter(
-        ([nx, ny]) =>
-          isInside(nx, ny) && !occupied.has(`${nx},${ny}`)
-      );
-
-      if (moves.length === 0) break;
-
-      [x, y] = moves[Math.floor(Math.random() * moves.length)];
-      path.push([x, y]);
-      occupied.add(`${x},${y}`);
-    }
-
+    const path = generateRandomPath(4 + Math.floor(Math.random() * 3), occupied);
+    solutionPaths[color] = path;
     dots[color] = [path[0], path[path.length - 1]];
   });
 
@@ -163,27 +162,20 @@ canvas.addEventListener("pointerup", () => {
   checkWin();
 });
 
-// ===== FIXED WIN CHECK =====
+// ===== CHECK WIN =====
 function checkWin() {
-  for (let color in dots) {
-    const path = paths[color];
-    if (!path || path.length < 2) return;
+  for (let color in solutionPaths) {
+    const sol = solutionPaths[color];
+    const playerPath = paths[color];
+    if (!playerPath) return;
 
-    const [start, end] = dots[color];
-    const first = path[0];
-    const last = path[path.length - 1];
-
-    if (
-      first[0] !== start[0] ||
-      first[1] !== start[1] ||
-      last[0] !== end[0] ||
-      last[1] !== end[1]
-    ) {
-      return;
+    // Must match length & endpoints
+    if (playerPath.length !== sol.length) return;
+    for (let i = 0; i < sol.length; i++) {
+      if (playerPath[i][0] !== sol[i][0] || playerPath[i][1] !== sol[i][1]) return;
     }
   }
 
-  // ✅ WIN
   levelActive = false;
   document.getElementById("status").innerText = "🎉 Level Complete!";
   setTimeout(generateLevel, 1200);
