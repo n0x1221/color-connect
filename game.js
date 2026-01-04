@@ -5,7 +5,6 @@ const GRID_SIZE = 5;
 const CELL_SIZE = canvas.width / GRID_SIZE;
 
 let paths = {};
-let solutionPaths = {}; // Store full solution paths
 let dots = {};
 let currentColor = null;
 let levelActive = true;
@@ -16,6 +15,7 @@ const COLORS = ["red", "blue", "green"];
 function drawGrid() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+  // Grid lines
   ctx.strokeStyle = "#555";
   for (let i = 0; i <= GRID_SIZE; i++) {
     ctx.beginPath();
@@ -45,7 +45,7 @@ function drawGrid() {
     });
   }
 
-  // Draw paths
+  // Draw player paths
   for (let color in paths) {
     ctx.strokeStyle = color;
     ctx.lineWidth = 10;
@@ -85,53 +85,39 @@ function getCell(e) {
   ];
 }
 
-// ===== SOLVABLE PATH GENERATOR =====
-function generateRandomPath(length, occupied) {
-  let x = Math.floor(Math.random() * GRID_SIZE);
-  let y = Math.floor(Math.random() * GRID_SIZE);
-  let path = [[x, y]];
-  occupied.add(`${x},${y}`);
-
-  for (let i = 0; i < length; i++) {
-    let moves = [
-      [x + 1, y],
-      [x - 1, y],
-      [x, y + 1],
-      [x, y - 1]
-    ].filter(([nx, ny]) => isInside(nx, ny) && !occupied.has(`${nx},${ny}`));
-
-    if (moves.length === 0) break;
-
-    [x, y] = moves[Math.floor(Math.random() * moves.length)];
-    path.push([x, y]);
-    occupied.add(`${x},${y}`);
-  }
-  return path;
-}
-
-// ===== GENERATE NEW LEVEL =====
+// ===== GENERATE RANDOM LEVEL =====
 function generateLevel() {
   paths = {};
-  solutionPaths = {};
   dots = {};
   levelActive = true;
 
   let occupied = new Set();
 
   COLORS.forEach(color => {
-    const path = generateRandomPath(4 + Math.floor(Math.random() * 3), occupied);
-    solutionPaths[color] = path;
-    dots[color] = [path[0], path[path.length - 1]];
+    let start, end;
+
+    // Pick start dot
+    do {
+      start = [Math.floor(Math.random() * GRID_SIZE), Math.floor(Math.random() * GRID_SIZE)];
+    } while (occupied.has(`${start[0]},${start[1]}`));
+    occupied.add(`${start[0]},${start[1]}`);
+
+    // Pick end dot, must be distinct
+    do {
+      end = [Math.floor(Math.random() * GRID_SIZE), Math.floor(Math.random() * GRID_SIZE)];
+    } while (occupied.has(`${end[0]},${end[1]}`) || (end[0] === start[0] && end[1] === start[1]));
+    occupied.add(`${end[0]},${end[1]}`);
+
+    dots[color] = [start, end];
   });
 
   document.getElementById("status").innerText = "New Level";
   drawGrid();
 }
 
-// ===== INPUT =====
+// ===== INPUT HANDLERS =====
 canvas.addEventListener("pointerdown", (e) => {
   if (!levelActive) return;
-
   const [x, y] = getCell(e);
   for (let color in dots) {
     if (dots[color].some(d => d[0] === x && d[1] === y)) {
@@ -143,7 +129,6 @@ canvas.addEventListener("pointerdown", (e) => {
 
 canvas.addEventListener("pointermove", (e) => {
   if (!currentColor || !levelActive) return;
-
   const [x, y] = getCell(e);
   if (!isInside(x, y)) return;
 
@@ -162,24 +147,26 @@ canvas.addEventListener("pointerup", () => {
   checkWin();
 });
 
-// ===== CHECK WIN =====
+// ===== WIN DETECTION =====
 function checkWin() {
-  for (let color in solutionPaths) {
-    const sol = solutionPaths[color];
-    const playerPath = paths[color];
-    if (!playerPath) return;
+  for (let color in dots) {
+    const path = paths[color];
+    if (!path) return;
 
-    // Must match length & endpoints
-    if (playerPath.length !== sol.length) return;
-    for (let i = 0; i < sol.length; i++) {
-      if (playerPath[i][0] !== sol[i][0] || playerPath[i][1] !== sol[i][1]) return;
+    const [start, end] = dots[color];
+    const first = path[0];
+    const last = path[path.length - 1];
+
+    if (first[0] !== start[0] || first[1] !== start[1] ||
+        last[0] !== end[0] || last[1] !== end[1]) {
+      return;
     }
   }
 
   levelActive = false;
   document.getElementById("status").innerText = "🎉 Level Complete!";
-  setTimeout(generateLevel, 1200);
+  setTimeout(generateLevel, 1000);
 }
 
-// ===== START =====
+// ===== START GAME =====
 generateLevel();
