@@ -11,7 +11,7 @@ let levelActive = true;
 
 const COLORS = ["red", "blue", "green"];
 
-// ===== DRAW GRID =====
+// ===== DRAW GRID AND DOTS =====
 function drawGrid() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -147,22 +147,38 @@ canvas.addEventListener("pointerup", () => {
   checkWin();
 });
 
-// ===== WIN DETECTION =====
+// ===== WIN DETECTION (RELAXED, PLAYABLE) =====
 function checkWin() {
   for (let color in dots) {
     const path = paths[color];
-    if (!path) return;
+    if (!path || path.length < 2) return;
 
     const [start, end] = dots[color];
     const first = path[0];
     const last = path[path.length - 1];
 
-    if (first[0] !== start[0] || first[1] !== start[1] ||
-        last[0] !== end[0] || last[1] !== end[1]) {
-      return;
+    // Must connect the dots (either order is fine)
+    const connectsCorrectly =
+      (first[0] === start[0] && first[1] === start[1] && last[0] === end[0] && last[1] === end[1]) ||
+      (first[0] === end[0] && first[1] === end[1] && last[0] === start[0] && last[1] === start[1]);
+    if (!connectsCorrectly) return;
+
+    // All steps must be adjacent
+    for (let i = 0; i < path.length - 1; i++) {
+      if (!isAdjacent(path[i], path[i + 1])) return;
+    }
+
+    // Cannot cross other paths
+    for (let i = 0; i < path.length; i++) {
+      const [x, y] = path[i];
+      for (let other in paths) {
+        if (other === color) continue;
+        if (paths[other].some(p => p[0] === x && p[1] === y)) return;
+      }
     }
   }
 
+  // All colors connected correctly
   levelActive = false;
   document.getElementById("status").innerText = "🎉 Level Complete!";
   setTimeout(generateLevel, 1000);
