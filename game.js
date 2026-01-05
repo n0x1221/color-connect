@@ -2,8 +2,8 @@ const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
 // ================= GAME STATE =================
-let GRID_SIZE = 5;
-let COLORS = ["red", "blue", "green"];
+let GRID_SIZE = 4; // smaller board
+let COLORS = ["red", "blue", "green", "orange"];
 
 let dots = {};
 let paths = {};
@@ -45,7 +45,6 @@ function occupied(x, y, ignore) {
 function drawGrid() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // Grid
   ctx.strokeStyle = "#555";
   for (let i = 0; i <= GRID_SIZE; i++) {
     ctx.beginPath();
@@ -59,7 +58,6 @@ function drawGrid() {
     ctx.stroke();
   }
 
-  // Paths
   for (let c in paths) {
     ctx.strokeStyle = c;
     ctx.lineWidth = 10;
@@ -76,7 +74,6 @@ function drawGrid() {
   }
   ctx.shadowBlur = 0;
 
-  // Dots
   for (let c in dots) {
     dots[c].forEach(([x, y]) => {
       ctx.fillStyle = c;
@@ -130,13 +127,13 @@ function generateLevel() {
   solutionPaths = {};
   levelActive = true;
 
-  // Slow grid growth
-  if (level % 4 === 0 && GRID_SIZE < 9) GRID_SIZE++;
+  // Board grows slowly but stays small
+  if (level % 5 === 0 && GRID_SIZE < 6) GRID_SIZE++;
 
-  // Fast color growth
-  const palette = ["orange", "purple", "cyan", "yellow", "pink", "lime"];
-  while (COLORS.length < Math.min(GRID_SIZE + 1, 7)) {
-    COLORS.push(palette[COLORS.length - 3]);
+  // Colors increase aggressively
+  const palette = ["purple", "cyan", "yellow", "pink", "lime", "brown"];
+  while (COLORS.length < Math.min(GRID_SIZE * 2 - 1, 8)) {
+    COLORS.push(palette[COLORS.length - 4]);
   }
 
   const used = new Set();
@@ -146,11 +143,10 @@ function generateLevel() {
     let path = null;
     let tries = 0;
 
-    // High board coverage → harder puzzles
-    const targetCoverage = 0.65 + Math.random() * 0.2;
-    const minLength = Math.floor((totalCells * targetCoverage) / COLORS.length);
+    // Shorter paths but many of them
+    const minLength = Math.max(3, Math.floor(totalCells / COLORS.length));
 
-    while (!path && tries++ < 60) {
+    while (!path && tries++ < 80) {
       const start = [
         Math.floor(Math.random() * GRID_SIZE),
         Math.floor(Math.random() * GRID_SIZE)
