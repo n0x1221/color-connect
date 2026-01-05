@@ -1,189 +1,187 @@
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
-// ===== GAME STATE =====
 let GRID_SIZE = 5;
 let COLORS = ["red", "blue", "green"];
+
 let paths = {};
 let dots = {};
+let solutionPaths = {};
 let currentColor = null;
-let levelActive = true;
 let level = 1;
-let moves = 0;
+let levelActive = true;
 
-// ===== DRAW FUNCTIONS =====
+const CELL = () => canvas.width / GRID_SIZE;
+
+// ===== DRAW =====
 function drawGrid() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Grid lines
-    ctx.strokeStyle = "#555";
-    for (let i = 0; i <= GRID_SIZE; i++) {
-        ctx.beginPath();
-        ctx.moveTo(i * canvas.width / GRID_SIZE, 0);
-        ctx.lineTo(i * canvas.width / GRID_SIZE, canvas.height);
-        ctx.stroke();
+  ctx.strokeStyle = "#555";
+  for (let i = 0; i <= GRID_SIZE; i++) {
+    ctx.beginPath();
+    ctx.moveTo(i * CELL(), 0);
+    ctx.lineTo(i * CELL(), canvas.height);
+    ctx.stroke();
 
-        ctx.beginPath();
-        ctx.moveTo(0, i * canvas.height / GRID_SIZE);
-        ctx.lineTo(canvas.width, i * canvas.height / GRID_SIZE);
-        ctx.stroke();
-    }
+    ctx.beginPath();
+    ctx.moveTo(0, i * CELL());
+    ctx.lineTo(canvas.width, i * CELL());
+    ctx.stroke();
+  }
 
-    // Draw paths with glow
-    for (let color in paths) {
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 10;
-        ctx.shadowColor = color;
-        ctx.shadowBlur = 8;
-        ctx.beginPath();
-        paths[color].forEach(([x, y], i) => {
-            const px = x * canvas.width / GRID_SIZE + canvas.width / GRID_SIZE / 2;
-            const py = y * canvas.height / GRID_SIZE + canvas.height / GRID_SIZE / 2;
-            if (i === 0) ctx.moveTo(px, py);
-            else ctx.lineTo(px, py);
-        });
-        ctx.stroke();
-    }
-    ctx.shadowBlur = 0;
+  for (let color in dots) {
+    dots[color].forEach(([x, y]) => {
+      ctx.fillStyle = color;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      ctx.arc(
+        x * CELL() + CELL() / 2,
+        y * CELL() + CELL() / 2,
+        CELL() / 4,
+        0,
+        Math.PI * 2
+      );
+      ctx.fill();
+    });
+  }
+  ctx.shadowBlur = 0;
 
-    // Draw dots with glow
-    for (let color in dots) {
-        dots[color].forEach(([x, y]) => {
-            ctx.fillStyle = color;
-            ctx.beginPath();
-            const px = x * canvas.width / GRID_SIZE + canvas.width / GRID_SIZE / 2;
-            const py = y * canvas.height / GRID_SIZE + canvas.height / GRID_SIZE / 2;
-            ctx.arc(px, py, canvas.width / GRID_SIZE / 4, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.shadowColor = color;
-            ctx.shadowBlur = 10;
-            ctx.fill();
-        });
-        ctx.shadowBlur = 0;
-    }
+  for (let color in paths) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 10;
+    ctx.beginPath();
+    paths[color].forEach(([x, y], i) => {
+      const px = x * CELL() + CELL() / 2;
+      const py = y * CELL() + CELL() / 2;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    });
+    ctx.stroke();
+  }
 
-    // Update HUD
-    document.getElementById("status").innerText = `Level: ${level} | Moves: ${moves}`;
+  document.getElementById("status").innerText = `Level ${level}`;
 }
 
 // ===== HELPERS =====
-function isInside(x, y) { return x >= 0 && y >= 0 && x < GRID_SIZE && y < GRID_SIZE; }
-function isAdjacent(a, b) { return Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) === 1; }
-function isOccupied(x, y, ignoreColor) {
-    for (let color in paths) {
-        if (color === ignoreColor) continue;
-        if (paths[color].some(p => p[0] === x && p[1] === y)) return true;
-    }
-    return false;
+function inside(x, y) {
+  return x >= 0 && y >= 0 && x < GRID_SIZE && y < GRID_SIZE;
 }
-function getCell(e) {
-    const rect = canvas.getBoundingClientRect();
-    return [
-        Math.floor((e.clientX - rect.left) / (canvas.width / GRID_SIZE)),
-        Math.floor((e.clientY - rect.top) / (canvas.height / GRID_SIZE))
-    ];
+function adj(a, b) {
+  return Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) === 1;
+}
+function cellFromEvent(e) {
+  const r = canvas.getBoundingClientRect();
+  return [
+    Math.floor((e.clientX - r.left) / CELL()),
+    Math.floor((e.clientY - r.top) / CELL())
+  ];
+}
+function occupied(x, y, ignore) {
+  for (let c in paths) {
+    if (c === ignore) continue;
+    if (paths[c].some(p => p[0] === x && p[1] === y)) return true;
+  }
+  return false;
+}
+
+// ===== SOLVABLE PATH GENERATOR =====
+function generatePath(start, length, used) {
+  let path = [start];
+  used.add(start.join(","));
+
+  while (path.length < length) {
+    const [x, y] = path.at(-1);
+    const options = [
+      [x+1,y],[x-1,y],[x,y+1],[x,y-1]
+    ].filter(([nx, ny]) =>
+      inside(nx, ny) && !used.has(`${nx},${ny}`)
+    );
+
+    if (!options.length) break;
+    const next = options[Math.floor(Math.random() * options.length)];
+    used.add(next.join(","));
+    path.push(next);
+  }
+  return path.length >= 2 ? path : null;
 }
 
 // ===== LEVEL GENERATION =====
 function generateLevel() {
-    paths = {};
-    dots = {};
-    levelActive = true;
-    moves = 0;
+  paths = {};
+  dots = {};
+  solutionPaths = {};
+  levelActive = true;
 
-    // Difficulty scaling: add colors and increase grid
-    if (level % 2 === 0 && GRID_SIZE < 8) GRID_SIZE++;
-    if (level % 2 === 0 && COLORS.length < 6) COLORS.push("orange", "purple", "cyan")[level % 3];
+  if (level % 2 === 0 && GRID_SIZE < 8) GRID_SIZE++;
+  if (level % 3 === 0 && COLORS.length < 6)
+    COLORS.push(["orange","purple","cyan"][COLORS.length-3]);
 
-    const occupied = new Set();
+  let used = new Set();
 
-    COLORS.forEach(color => {
-        let start, end;
-        do { start = [Math.floor(Math.random() * GRID_SIZE), Math.floor(Math.random() * GRID_SIZE)]; }
-        while (occupied.has(`${start[0]},${start[1]}`));
-        occupied.add(`${start[0]},${start[1]}`);
+  for (let color of COLORS) {
+    let path = null;
+    while (!path) {
+      const start = [
+        Math.floor(Math.random() * GRID_SIZE),
+        Math.floor(Math.random() * GRID_SIZE)
+      ];
+      if (used.has(start.join(","))) continue;
+      path = generatePath(start, 4 + Math.floor(Math.random()*4), used);
+    }
+    solutionPaths[color] = path;
+    dots[color] = [path[0], path.at(-1)];
+  }
 
-        do { end = [Math.floor(Math.random() * GRID_SIZE), Math.floor(Math.random() * GRID_SIZE)]; }
-        while (occupied.has(`${end[0]},${end[1]}`) || (end[0] === start[0] && end[1] === start[1]));
-        occupied.add(`${end[0]},${end[1]}`);
-
-        dots[color] = [start, end];
-    });
-
-    drawGrid();
+  drawGrid();
 }
 
-// ===== INPUT HANDLERS =====
+// ===== INPUT =====
 canvas.addEventListener("pointerdown", e => {
-    if (!levelActive) return;
-    const [x, y] = getCell(e);
-    for (let color in dots) {
-        if (dots[color].some(d => d[0] === x && d[1] === y)) {
-            currentColor = color;
-            paths[color] = [[x, y]];
-            moves++;
-        }
+  if (!levelActive) return;
+  const [x,y] = cellFromEvent(e);
+  for (let c in dots) {
+    if (dots[c].some(d => d[0]===x && d[1]===y)) {
+      currentColor = c;
+      paths[c] = [[x,y]];
     }
+  }
 });
 
 canvas.addEventListener("pointermove", e => {
-    if (!currentColor || !levelActive) return;
-    const [x, y] = getCell(e);
-    const path = paths[currentColor];
-    const last = path.at(-1);
-
-    if (!isInside(x, y) || !isAdjacent(last, [x, y])) return;
-    if (isOccupied(x, y, currentColor)) return;
-
-    path.push([x, y]);
-    drawGrid();
+  if (!currentColor || !levelActive) return;
+  const [x,y] = cellFromEvent(e);
+  const p = paths[currentColor];
+  const last = p.at(-1);
+  if (!inside(x,y) || !adj(last,[x,y]) || occupied(x,y,currentColor)) return;
+  p.push([x,y]);
+  drawGrid();
 });
 
 canvas.addEventListener("pointerup", () => {
-    currentColor = null;
-    checkWin();
+  currentColor = null;
+  checkWin();
 });
 
-// ===== UNDO PATH (LONG PRESS) =====
-let longPressTimer;
-canvas.addEventListener("pointerdown", e => {
-    longPressTimer = setTimeout(() => {
-        if (currentColor && paths[currentColor]?.length > 1) {
-            paths[currentColor].pop();
-            drawGrid();
-        }
-    }, 500);
-});
-canvas.addEventListener("pointerup", e => clearTimeout(longPressTimer));
-
-// ===== WIN DETECTION =====
+// ===== WIN CHECK =====
 function checkWin() {
-    for (let color in dots) {
-        const path = paths[color];
-        if (!path || path.length < 2) return;
-        const [start, end] = dots[color];
-        const first = path[0], last = path[path.length-1];
-        const connects = (first[0] === start[0] && first[1] === start[1] && last[0] === end[0] && last[1] === end[1])
-                      || (first[0] === end[0] && first[1] === end[1] && last[0] === start[0] && last[1] === start[1]);
-        if (!connects) return;
+  for (let c in dots) {
+    const p = paths[c];
+    if (!p || p.length < 2) return;
+    const [a,b] = dots[c];
+    const s = p[0], e = p.at(-1);
+    if (!(
+      (s[0]===a[0]&&s[1]===a[1]&&e[0]===b[0]&&e[1]===b[1]) ||
+      (s[0]===b[0]&&s[1]===b[1]&&e[0]===a[0]&&e[1]===a[1])
+    )) return;
+  }
 
-        for (let i = 0; i < path.length-1; i++) {
-            if (!isAdjacent(path[i], path[i+1])) return;
-        }
-        for (let i = 0; i < path.length; i++) {
-            const [x, y] = path[i];
-            for (let other in paths) {
-                if (other === color) continue;
-                if (paths[other].some(p => p[0] === x && p[1] === y)) return;
-            }
-        }
-    }
-
-    levelActive = false;
-    document.getElementById("status").innerText = `🎉 Level ${level} Complete!`;
-    level++;
-    setTimeout(generateLevel, 1200);
+  levelActive = false;
+  document.getElementById("status").innerText = "🎉 Solved!";
+  level++;
+  setTimeout(generateLevel, 1200);
 }
 
-// ===== START GAME =====
+// ===== START =====
 generateLevel();
